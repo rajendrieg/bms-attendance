@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BMS Attendance Sign-in</title>
+<!--
+  MUT Biomedical Sciences — QR Attendance sign-in page (self-contained, no backend).
+
+  HOW IT WORKS
+  1. Each session's QR code encodes a URL to this page with parameters:
+       ?s=SESSION-ID&subj=Subject&type=Practical&ven=Venue&lat=-29.9689&lng=30.9139&r=80&t=2026-08-21T09:00&w=15
+     (t = session start local time, w = sign-in window in minutes either side)
+  2. Page reads phone GPS, computes distance to the venue, then redirects to a
+     PRE-FILLED Microsoft Form carrying: student number, session id, lat, lng,
+     accuracy, distance, and in/out-of-venue status. The existing standard
+     Forms -> Power Automate -> SharePoint pipeline does the rest.
+
+  CONFIGURE (one time): create the MS Form (7 short-answer questions in this order:
+  Student number / Session ID / Latitude / Longitude / Accuracy m / Distance m / Status),
+  open its "Get pre-filled URL" for a dummy response, and paste the URL pattern below,
+  replacing each typed dummy answer with the {tokens}.
+-->
+<script>
+const FORM_PREFILL_TEMPLATE = "https://forms.cloud.microsoft/Pages/ResponsePage.aspx" +
+  "?id=vukQNQHUKkOA65iF4HUjHjdsYWMZ_-xNoSP7b5BsH7VUNUxZTlc5TzJZSE1VSjlLNkFHRU1DWVJaUi4u" +
+  "&r009293cb3ff04330b4a37a32092bd0c7={student}" +
+  "&r04664a16e3b24870a49e6dd73c004d6a={session}" +
+  "&r3fa13924089749c6ad62277068684893={lat}" +
+  "&r81201ccb163d46a69f9698561abf341a={lng}" +
+  "&r44ab023214ae43788286fbf0b8176959={acc}" +
+  "&r5bf93bdbc3684ec19e7c09a557168e5f={dist}" +
+  "&rf811abb953b94957ac5b8e9ba5932646={status}"
+// Configured 18 Aug 2026 against the live "BMS Attendance Sign-in" form (MUT tenant).
+</script>
+<style>
+  :root{--navy:#14335c;--teal:#0e7c7b;--red:#b42318;--green:#067647;--soft:#f4f6f9}
+  *{box-sizing:border-box;margin:0}
+  body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--soft);
+       min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+  .card{background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(20,51,92,.12);
+        width:100%;max-width:420px;padding:26px 22px}
+  h1{font-size:19px;color:var(--navy);margin-bottom:4px}
+  .sub{color:#5d6470;font-size:13px;margin-bottom:18px}
+  .sess{background:var(--soft);border-left:4px solid var(--teal);border-radius:0 8px 8px 0;
+        padding:10px 14px;margin-bottom:18px;font-size:14px;line-height:1.55}
+  .sess b{color:var(--navy)}
+  label{display:block;font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px}
+  input{width:100%;font-size:17px;padding:12px;border:1.5px solid #cfd6de;border-radius:10px;margin-bottom:16px}
+  input:focus{outline:none;border-color:var(--teal)}
+  button{width:100%;font-size:17px;font-weight:700;color:#fff;background:var(--teal);
+         border:none;border-radius:10px;padding:14px;cursor:pointer}
+  button:disabled{background:#9db4b3}
+  .msg{margin-top:14px;font-size:14px;line-height:1.5;padding:11px 13px;border-radius:9px;display:none}
+  .msg.err{display:block;background:#fdecea;color:var(--red)}
+  .msg.ok{display:block;background:#e6f4ea;color:var(--green)}
+  .msg.info{display:block;background:#eef2f7;color:var(--navy)}
+  .foot{margin-top:16px;font-size:11px;color:#8a93a0;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Attendance sign-in</h1>
+  <div class="sub">Department of Biomedical Sciences · MUT</div>
+  <div class="sess" id="sess">Loading session…</div>
+  <label for="sn">Student number</label>
+  <input id="sn" inputmode="text" autocomplete="off" placeholder="e.g. 21900123" maxlength="12">
+  <button id="go">Sign in — share my location</button>
+  <div class="msg" id="msg"></div>
+  <div class="foot">Your location is captured once, only to confirm you are at the venue,
+  and is stored under the Department's POPIA notice. Location must be enabled on your phone.</div>
+</div>
+<script>
+const q = new URLSearchParams(location.search);
+const S = {
+  id: q.get('s'), subj: q.get('subj') || '', type: q.get('type') || '',
+  ven: q.get('ven') || '', lat: parseFloat(q.get('lat')), lng: parseFloat(q.get('lng')),
+  r: parseFloat(q.get('r')) || 80, t: q.get('t'), w: parseFloat(q.get('w')) || 15
+};
+const sess = document.getElementById('sess'), msg = document.getElementById('msg'),
+      btn = document.getElementById('go'), sn = document.getElementById('sn');
+function show(cls, text){ msg.className = 'msg ' + cls; msg.textContent = text; }
+
+if (!S.id || isNaN(S.lat) || isNaN(S.lng)) {
+  sess.innerHTML = '<b>Invalid QR code.</b> Please scan the code displayed at your venue.';
+  btn.disabled = true;
+} else {
+  sess.innerHTML = '<b>' + (S.subj || S.id) + '</b>' + (S.type ? ' — ' + S.type : '') +
+    (S.ven ? '<br>Venue: ' + S.ven : '') + (S.t ? '<br>Session: ' + S.t.replace('T',' ') : '');
+  if (S.t) {
+    const start = new Date(S.t), now = new Date();
+    const diffMin = Math.abs(now - start) / 60000;
+    if (diffMin > S.w) {
+      show('err', 'This sign-in window has closed (valid ' + S.w + ' min around the session start). Speak to your lecturer.');
+      btn.disabled = true;
+    }
+  }
+}
+
+function distM(lat1, lng1, lat2, lng2){
+  const R = 6371000, toR = Math.PI/180;
+  const dLat = (lat2-lat1)*toR, dLng = (lng2-lng1)*toR;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*toR)*Math.cos(lat2*toR)*Math.sin(dLng/2)**2;
+  return Math.round(2*R*Math.asin(Math.sqrt(a)));
+}
+
+btn.addEventListener('click', () => {
+  const num = sn.value.trim();
+  if (!/^[0-9]{5,12}$/.test(num)) { show('err', 'Please enter a valid student number (digits only).'); return; }
+  if (FORM_PREFILL_TEMPLATE.startsWith('PASTE_')) { show('err', 'This page has not been configured yet (form link missing). Tell your lecturer.'); return; }
+  btn.disabled = true;
+  show('info', 'Getting your location — allow the permission prompt…');
+  navigator.geolocation.getCurrentPosition(pos => {
+    const la = pos.coords.latitude, ln = pos.coords.longitude,
+          acc = Math.round(pos.coords.accuracy),
+          d = distM(la, ln, S.lat, S.lng),
+          status = (d <= S.r) ? 'IN VENUE' : 'OUTSIDE VENUE (' + d + 'm)';
+    show('ok', 'Location captured (' + d + 'm from venue). Submitting…');
+    const url = FORM_PREFILL_TEMPLATE
+      .replace('{student}', encodeURIComponent(num))
+      .replace('{session}', encodeURIComponent(S.id))
+      .replace('{lat}', encodeURIComponent(la.toFixed(6)))
+      .replace('{lng}', encodeURIComponent(ln.toFixed(6)))
+      .replace('{acc}', encodeURIComponent(acc))
+      .replace('{dist}', encodeURIComponent(d))
+      .replace('{status}', encodeURIComponent(status));
+    location.href = url;
+  }, err => {
+    btn.disabled = false;
+    show('err', err.code === 1
+      ? 'Location permission was denied. Attendance requires location — enable it in your browser settings and try again.'
+      : 'Could not read your location (' + err.message + '). Move nearer a window and retry.');
+  }, {enableHighAccuracy: true, timeout: 15000, maximumAge: 0});
+});
+</script>
+</body>
+</html>
