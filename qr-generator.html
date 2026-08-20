@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BMS Attendance — QR Sheet Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:"Segoe UI",Arial,sans-serif;margin:0;color:#16181d}
+  .panel{background:#f4f6f9;padding:18px 24px;border-bottom:1px solid #dfe4ea}
+  .panel h1{font-size:18px;color:#14335c;margin:0 0 4px}
+  .panel p{margin:0 0 10px;font-size:13px;color:#5d6470;max-width:900px}
+  textarea{width:100%;height:120px;font-family:Consolas,monospace;font-size:12.5px;
+           border:1px solid #cfd6de;border-radius:8px;padding:10px}
+  .row{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
+  .row label{font-size:12.5px;font-weight:600;color:#14335c}
+  input[type=text],input[type=number],input[type=datetime-local],select{
+    font-size:13px;padding:7px 10px;border:1px solid #cfd6de;border-radius:7px}
+  input[type=text]{width:420px}
+  button{font-size:13.5px;font-weight:600;color:#fff;background:#0e7c7b;border:none;
+         border-radius:8px;padding:9px 16px;cursor:pointer}
+  button.secondary{background:#5d6470}
+  .cards{display:flex;flex-wrap:wrap;gap:14px;padding:22px}
+  .qcard{width:330px;border:1.5px solid #14335c;border-radius:12px;padding:16px;text-align:center;
+         page-break-inside:avoid}
+  .qcard h2{font-size:16px;color:#14335c;margin:0 0 2px}
+  .qcard .meta{font-size:12.5px;color:#444;margin-bottom:10px;line-height:1.5}
+  .qcard .qr{display:flex;justify-content:center;margin-bottom:8px}
+  .qcard .hint{font-size:11px;color:#5d6470;line-height:1.45}
+  .quickadd{background:#fff;border:1px solid #dfe4ea;border-radius:10px;padding:14px 16px;margin-bottom:14px}
+  .quickadd .title{font-weight:700;font-size:13.5px;color:#14335c;margin-bottom:2px}
+  .quickadd .sub{font-size:11.5px;color:#5d6470;margin-bottom:8px}
+  #venueDetail{font-size:11.5px;color:#5d6470;margin-top:6px}
+  details{margin-top:10px}
+  summary{cursor:pointer;font-size:12.5px;color:#0e7c7b;font-weight:700}
+  .newvenue-tip{font-size:11px;color:#5d6470;margin-top:6px;max-width:700px}
+  @media print{.panel{display:none}.cards{padding:0}}
+</style>
+</head>
+<body>
+<div class="panel">
+  <h1>QR Sheet Generator — BMS Attendance</h1>
+  <p>Use <b>Quick add a session</b> below — pick the venue from the dropdown (its GPS coordinates are already saved, no need to look them up or type them) and click <b>Add to sheet</b>. Click <b>Generate QR sheet</b>, then display it on the projector's first slide or your own phone — no printing required.</p>
+
+  <div class="quickadd">
+    <div class="title">Quick add a session</div>
+    <div class="sub">Pick a venue from the list — its coordinates are already saved, so you never have to type or look them up.</div>
+    <div class="row">
+      <label>Session ID</label><input type="text" id="qaId" placeholder="e.g. CYT2-LEC-W6" style="width:150px">
+      <label>Subject</label><input type="text" id="qaSubj" placeholder="e.g. Cytology II 2026" style="width:220px">
+      <label>Type</label>
+      <select id="qaType"><option>Lecture</option><option>Practical</option></select>
+      <label>Venue</label>
+      <select id="qaVenue" onchange="onVenueChange()"></select>
+      <label>Date &amp; time</label><input type="datetime-local" id="qaDT">
+      <label>Window (mins)</label><input type="number" id="qaWin" value="90" style="width:70px">
+      <button type="button" onclick="addLine()">+ Add to sheet</button>
+    </div>
+    <div id="venueDetail"></div>
+
+    <details>
+      <summary>+ Add or update a venue</summary>
+      <div class="row">
+        <label>Name</label><input type="text" id="nvName" placeholder="Venue name" style="width:170px">
+        <label>Latitude</label><input type="text" id="nvLat" placeholder="e.g. -29.9689" style="width:110px">
+        <label>Longitude</label><input type="text" id="nvLng" placeholder="e.g. 30.9139" style="width:110px">
+        <label>Radius (m)</label><input type="number" id="nvRadius" value="80" style="width:80px">
+        <button type="button" class="secondary" onclick="useMyLocation()">📍 Use my current location</button>
+        <button type="button" onclick="saveVenue()">Save venue</button>
+      </div>
+      <div class="newvenue-tip">Stand inside the venue with this page open on your phone or laptop, click <b>Use my current location</b> to capture accurate GPS automatically, then <b>Save venue</b>. It's remembered on this device/browser and will appear in the Venue dropdown above from then on — reuse it every week, no re-typing. Using the same name as an existing venue updates its saved coordinates.<br><br>Note for Haem Lab / Chem Path Lab / Micro Lab / Histo&#8203;/Cyto Lab: since these sit right next to each other on the same floor, ordinary phone GPS (accurate to roughly 5&ndash;30m, worse indoors) usually can't tell adjacent rooms apart. Capturing each one separately is still worth doing — it confirms students are on that floor/in that cluster of rooms — but don't expect it to catch someone sitting in the lab next door instead of the correct one.</div>
+    </details>
+  </div>
+
+  <p style="font-size:12px;color:#5d6470">Prefer to paste several sessions at once? Edit the box below directly, one line per session, semicolon-separated:
+  <b>SessionID; Subject; Type; Venue; VenueLat; VenueLng; RadiusM; StartLocal (YYYY-MM-DDTHH:MM); WindowMins</b></p>
+  <textarea id="src">DEMO-001; DEMO Subject; Practical; Haem Lab; -29.9689; 30.9139; 80; 2026-08-18T11:00; 20</textarea>
+  <div class="row">
+    <label>Sign-in page URL:</label>
+    <input type="text" id="base" value="https://rajendrieg.github.io/bms-attendance/signin.html">
+    <button onclick="gen()">Generate QR sheet</button>
+  </div>
+</div>
+<div class="cards" id="cards"></div>
+<script>
+// ---- Venue directory (name -> saved GPS coordinates) ----
+const DEFAULT_VENUES = [
+  {name:"Hall 7/8", lat:-29.9689, lng:30.9139, radius:300},
+  {name:"NS01", lat:-29.9689, lng:30.9139, radius:300},
+  {name:"P21", lat:-29.9689, lng:30.9139, radius:300},
+  {name:"Haem Lab", lat:-29.9689, lng:30.9139, radius:80},
+  {name:"Chem Path Lab", lat:-29.9689, lng:30.9139, radius:80},
+  {name:"Micro Lab", lat:-29.9689, lng:30.9139, radius:80},
+  {name:"Histo/Cyto Lab", lat:-29.9689, lng:30.9139, radius:80}
+];
+
+function loadVenues(){
+  try{
+    const saved = JSON.parse(localStorage.getItem('bmsVenues') || 'null');
+    if (saved && Array.isArray(saved) && saved.length) return saved;
+  }catch(e){}
+  return DEFAULT_VENUES.slice();
+}
+function persistVenues(){
+  try{ localStorage.setItem('bmsVenues', JSON.stringify(VENUES)); }catch(e){}
+}
+
+let VENUES = loadVenues();
+
+function populateVenueDropdown(preselectName){
+  const sel = document.getElementById('qaVenue');
+  sel.innerHTML = VENUES.map((v,i) => '<option value="' + i + '">' + v.name + '</option>').join('');
+  if (preselectName) {
+    const idx = VENUES.findIndex(v => v.name === preselectName);
+    if (idx >= 0) sel.value = idx;
+  }
+  onVenueChange();
+}
+
+function onVenueChange(){
+  const v = VENUES[document.getElementById('qaVenue').value];
+  document.getElementById('venueDetail').textContent = v
+    ? v.name + ':  ' + v.lat + ', ' + v.lng + '  ·  radius ' + v.radius + 'm'
+    : '';
+}
+
+function useMyLocation(){
+  if (!navigator.geolocation){ alert('Location is not available in this browser.'); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      document.getElementById('nvLat').value = pos.coords.latitude.toFixed(6);
+      document.getElementById('nvLng').value = pos.coords.longitude.toFixed(6);
+    },
+    err => { alert('Could not get your location: ' + err.message); },
+    {enableHighAccuracy:true, timeout:10000}
+  );
+}
+
+function saveVenue(){
+  const name = document.getElementById('nvName').value.trim();
+  const lat = document.getElementById('nvLat').value.trim();
+  const lng = document.getElementById('nvLng').value.trim();
+  const radius = document.getElementById('nvRadius').value.trim() || '80';
+  if (!name || !lat || !lng){ alert('Venue name, latitude and longitude are all needed.'); return; }
+  const entry = {name, lat:parseFloat(lat), lng:parseFloat(lng), radius:parseInt(radius,10)};
+  const existingIdx = VENUES.findIndex(v => v.name.toLowerCase() === name.toLowerCase());
+  if (existingIdx >= 0) VENUES[existingIdx] = entry; else VENUES.push(entry);
+  persistVenues();
+  populateVenueDropdown(name);
+  document.getElementById('nvName').value = '';
+  document.getElementById('nvLat').value = '';
+  document.getElementById('nvLng').value = '';
+  alert('Venue "' + name + '" saved. It now appears in the Venue dropdown above, remembered on this computer/browser.');
+}
+
+function addLine(){
+  const id = document.getElementById('qaId').value.trim();
+  const subj = document.getElementById('qaSubj').value.trim();
+  const type = document.getElementById('qaType').value;
+  const v = VENUES[document.getElementById('qaVenue').value];
+  const dt = document.getElementById('qaDT').value;
+  const win = document.getElementById('qaWin').value.trim() || '90';
+  if (!id || !subj || !v || !dt){ alert('Please fill in Session ID, Subject, Venue and Date & time.'); return; }
+  const line = [id, subj, type, v.name, v.lat, v.lng, v.radius, dt, win].join('; ');
+  const ta = document.getElementById('src');
+  ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + line;
+  document.getElementById('qaId').value = '';
+  gen();
+}
+
+// ---- QR sheet generation (unchanged bulk-paste path still works) ----
+function gen(){
+  const base = document.getElementById('base').value.trim().replace(/\/$/,'');
+  const cards = document.getElementById('cards');
+  cards.innerHTML = '';
+  for (const line of document.getElementById('src').value.split('\n')) {
+    if (!line.trim()) continue;
+    const p = line.split(';').map(s => s.trim());
+    if (p.length < 9) { cards.insertAdjacentHTML('beforeend','<div class="qcard"><h2 style="color:#b42318">Bad line</h2><div class="meta">'+line+'</div></div>'); continue; }
+    const [id, subj, type, ven, lat, lng, r, t, w] = p;
+    const url = base + '?s=' + encodeURIComponent(id) + '&subj=' + encodeURIComponent(subj) +
+      '&type=' + encodeURIComponent(type) + '&ven=' + encodeURIComponent(ven) +
+      '&lat=' + lat + '&lng=' + lng + '&r=' + r + '&t=' + t + '&w=' + w;
+    const el = document.createElement('div');
+    el.className = 'qcard';
+    el.innerHTML = '<h2>' + subj + '</h2><div class="meta">' + type + ' · ' + ven +
+      '<br>' + t.replace('T',' ') + ' · sign-in window ±' + w + ' min<br><b>' + id + '</b></div>' +
+      '<div class="qr"></div><div class="hint">Scan with your phone camera → allow location → enter your student number. Sign-in only counts inside the venue.</div>';
+    cards.appendChild(el);
+    new QRCode(el.querySelector('.qr'), {text:url, width:190, height:190, correctLevel:QRCode.CorrectLevel.M});
+  }
+}
+
+populateVenueDropdown();
+gen();
+</script>
+</body>
+</html>
