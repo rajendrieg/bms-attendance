@@ -30,7 +30,8 @@ const FORM_PREFILL_TEMPLATE = "https://forms.cloud.microsoft/Pages/ResponsePage.
   "&r81201ccb163d46a69f9698561abf341a={lng}" +
   "&r44ab023214ae43788286fbf0b8176959={acc}" +
   "&r5bf93bdbc3684ec19e7c09a557168e5f={dist}" +
-  "&rf811abb953b94957ac5b8e9ba5932646={status}"
+    "&rf811abb953b94957ac5b8e9ba5932646={status}" +
+    "&r01d4a8a6fd6046e79730f0291ff6ee91={subject}";
 // Configured 18 Aug 2026 against the live "BMS Attendance Sign-in" form (MUT tenant).
 </script>
 <style>
@@ -123,7 +124,8 @@ btn.addEventListener('click', () => {
       .replace('{lng}', encodeURIComponent(ln.toFixed(6)))
       .replace('{acc}', encodeURIComponent(acc))
       .replace('{dist}', encodeURIComponent(d))
-      .replace('{status}', encodeURIComponent(status));
+      .replace('{status}', encodeURIComponent(status))
+        .replace('{subject}', encodeURIComponent(S.subj || 'UNKNOWN'));
     location.href = url;
   }, err => {
     btn.disabled = false;
