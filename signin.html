@@ -1,4 +1,48 @@
-<script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>BMS Attendance Sign-in</title>
+
+<!--
+  MUT Biomedical Sciences — QR Attendance sign-in page
+
+  SIGN-IN WINDOW
+  --------------
+  Normal sign-in window = 90 minutes either side of session start.
+
+  Example:
+    Session start: 09:00
+    Sign-in allowed: 07:30–10:30
+
+  IMPORTANT:
+  The QR code may contain a "w" value.
+  This page will NEVER accept a window shorter than 90 minutes.
+
+  Therefore:
+    w=3    -> 90 minutes
+    w=15   -> 90 minutes
+    w=90   -> 90 minutes
+    w=120  -> 120 minutes
+
+  This protects against accidentally generated QR codes with
+  an incorrect short window.
+
+  The page:
+    1. Reads the session details from the QR code.
+    2. Checks the sign-in time window.
+    3. Gets the student's GPS location.
+    4. Calculates the distance from the venue.
+    5. Redirects to the pre-filled Microsoft Form.
+*/
+
+
+/* ==========================================================
+   MICROSOFT FORM PREFILLED URL
+   ========================================================== */
+
 const FORM_PREFILL_TEMPLATE =
   "https://forms.cloud.microsoft/Pages/ResponsePage.aspx" +
   "?id=vukQNQHUKkOA65iF4HUjHjdsYWMZ_-xNoSP7b5BsH7VUNUxZTlc5TzJZSE1VSjlLNkFHRU1DWVJaUi4u" +
@@ -11,17 +55,225 @@ const FORM_PREFILL_TEMPLATE =
   "&rf811abb953b94957ac5b8e9ba5932646={status}" +
   "&r01d4a8a6fd6046e79730f0291ff6ee91={subject}";
 
+
+/* ==========================================================
+   ATTENDANCE WINDOW SETTINGS
+   ========================================================== */
+
 const DEFAULT_WINDOW_MINUTES = 90;
 const MINIMUM_WINDOW_MINUTES = 90;
 
+
+/* ==========================================================
+   PAGE STYLES
+   ========================================================== */
+
+</script>
+
+<style>
+  :root{
+    --navy:#14335c;
+    --teal:#0e7c7b;
+    --red:#b42318;
+    --green:#067647;
+    --soft:#f4f6f9;
+  }
+
+  *{
+    box-sizing:border-box;
+    margin:0;
+  }
+
+  body{
+    font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--soft);
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+  }
+
+  .card{
+    background:#fff;
+    border-radius:16px;
+    box-shadow:0 4px 24px rgba(20,51,92,.12);
+    width:100%;
+    max-width:420px;
+    padding:26px 22px;
+  }
+
+  h1{
+    font-size:19px;
+    color:var(--navy);
+    margin-bottom:4px;
+  }
+
+  .sub{
+    color:#5d6470;
+    font-size:13px;
+    margin-bottom:18px;
+  }
+
+  .sess{
+    background:var(--soft);
+    border-left:4px solid var(--teal);
+    border-radius:0 8px 8px 0;
+    padding:10px 14px;
+    margin-bottom:18px;
+    font-size:14px;
+    line-height:1.55;
+  }
+
+  .sess b{
+    color:var(--navy);
+  }
+
+  label{
+    display:block;
+    font-size:13px;
+    font-weight:600;
+    color:var(--navy);
+    margin-bottom:6px;
+  }
+
+  input{
+    width:100%;
+    font-size:17px;
+    padding:12px;
+    border:1.5px solid #cfd6de;
+    border-radius:10px;
+    margin-bottom:16px;
+  }
+
+  input:focus{
+    outline:none;
+    border-color:var(--teal);
+  }
+
+  button{
+    width:100%;
+    font-size:17px;
+    font-weight:700;
+    color:#fff;
+    background:var(--teal);
+    border:none;
+    border-radius:10px;
+    padding:14px;
+    cursor:pointer;
+  }
+
+  button:disabled{
+    background:#9db4b3;
+    cursor:not-allowed;
+  }
+
+  .msg{
+    margin-top:14px;
+    font-size:14px;
+    line-height:1.5;
+    padding:11px 13px;
+    border-radius:9px;
+    display:none;
+  }
+
+  .msg.err{
+    display:block;
+    background:#fdecea;
+    color:var(--red);
+  }
+
+  .msg.ok{
+    display:block;
+    background:#e6f4ea;
+    color:var(--green);
+  }
+
+  .msg.info{
+    display:block;
+    background:#eef2f7;
+    color:var(--navy);
+  }
+
+  .foot{
+    margin-top:16px;
+    font-size:11px;
+    color:#8a93a0;
+    text-align:center;
+    line-height:1.5;
+  }
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+  <h1>Attendance sign-in</h1>
+
+  <div class="sub">
+    Department of Biomedical Sciences · MUT
+  </div>
+
+  <div class="sess" id="sess">
+    Loading session…
+  </div>
+
+  <label for="sn">
+    Student number
+  </label>
+
+  <input
+    id="sn"
+    inputmode="text"
+    autocomplete="off"
+    placeholder="e.g. 21900123"
+    maxlength="12"
+  >
+
+  <button id="go" type="button">
+    Sign in — share my location
+  </button>
+
+  <div class="msg" id="msg"></div>
+
+  <div class="foot">
+    Your location is captured once, only to confirm you are at the venue,
+    and is stored under the Department's POPIA notice.
+    Location must be enabled on your phone.
+  </div>
+
+</div>
+
+
+<script>
+
+/* ==========================================================
+   READ QR PARAMETERS
+   ========================================================== */
+
 const q = new URLSearchParams(window.location.search);
 
+
+/* ==========================================================
+   CALCULATE EFFECTIVE ATTENDANCE WINDOW
+   ========================================================== */
+
 const suppliedWindow = parseFloat(q.get('w'));
+
 let effectiveWindowMinutes = DEFAULT_WINDOW_MINUTES;
 
-if (Number.isFinite(suppliedWindow) && suppliedWindow >= MINIMUM_WINDOW_MINUTES) {
+if (
+  Number.isFinite(suppliedWindow) &&
+  suppliedWindow >= MINIMUM_WINDOW_MINUTES
+){
   effectiveWindowMinutes = suppliedWindow;
 }
+
+
+/* ==========================================================
+   SESSION DATA
+   ========================================================== */
 
 const S = {
   id: q.get('s') || '',
@@ -35,15 +287,30 @@ const S = {
   w: effectiveWindowMinutes
 };
 
+
+/* ==========================================================
+   PAGE ELEMENTS
+   ========================================================== */
+
 const sess = document.getElementById('sess');
 const msg = document.getElementById('msg');
 const btn = document.getElementById('go');
 const sn = document.getElementById('sn');
 
+
+/* ==========================================================
+   MESSAGE FUNCTION
+   ========================================================== */
+
 function show(cls, text){
   msg.className = 'msg ' + cls;
   msg.textContent = text;
 }
+
+
+/* ==========================================================
+   SAFE HTML DISPLAY
+   ========================================================== */
 
 function escapeHtml(value){
   return String(value)
@@ -54,26 +321,137 @@ function escapeHtml(value){
     .replace(/'/g, '&#039;');
 }
 
+
+/* ==========================================================
+   DATE/TIME DISPLAY
+   ========================================================== */
+
 function formatDateTime(date){
   if (!(date instanceof Date) || isNaN(date.getTime())){
     return 'unknown';
   }
-  return date.toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
+
+  return date.toLocaleString(undefined, {
+    dateStyle:'medium',
+    timeStyle:'short'
+  });
 }
+
+
+/* ==========================================================
+   SESSION TIME PARSING
+   ========================================================== */
 
 function parseSessionTime(value){
   if (!value) return null;
 
   const normalized = String(value).trim();
-
-  // Support either "YYYY-MM-DDTHH:mm" or "YYYY-MM-DD HH:mm"
   const candidate = normalized.includes('T') ? normalized : normalized.replace(' ', 'T');
 
   const d = new Date(candidate);
-  if (!isNaN(d.getTime())) return d;
+  if (isNaN(d.getTime())) return null;
 
-  return null;
+  return d;
 }
+
+
+/* ==========================================================
+   VALIDATE QR CODE
+   ========================================================== */
+
+if (
+  !S.id ||
+  isNaN(S.lat) ||
+  isNaN(S.lng)
+){
+  sess.innerHTML =
+    '<b>Invalid QR code.</b> ' +
+    'Please scan the code displayed at your venue.';
+
+  btn.disabled = true;
+}
+else{
+  sess.innerHTML =
+    '<b>' +
+    escapeHtml(S.subj || S.id) +
+    '</b>' +
+
+    (
+      S.type
+        ? ' — ' + escapeHtml(S.type)
+        : ''
+    ) +
+
+    (
+      S.ven
+        ? '<br>Venue: ' + escapeHtml(S.ven)
+        : ''
+    ) +
+
+    (
+      S.t
+        ? '<br>Session: ' +
+          escapeHtml(S.t.replace('T',' '))
+        : ''
+    ) +
+
+    '<br>Window: ±' + S.w + ' minutes';
+}
+
+
+/* ==========================================================
+   CHECK ATTENDANCE WINDOW
+   ========================================================== */
+
+if (
+  !btn.disabled &&
+  S.t
+){
+  const start = parseSessionTime(S.t);
+
+  if (!start){
+    show(
+      'err',
+      'The session date/time in this QR code is invalid: ' +
+      S.t +
+      '. Please ask your lecturer for a new QR code.'
+    );
+
+    btn.disabled = true;
+  }
+  else{
+    const now = new Date();
+    const differenceMinutes = Math.abs(now - start) / 60000;
+    const openingTime = new Date(start.getTime() - S.w * 60 * 1000);
+    const closingTime = new Date(start.getTime() + S.w * 60 * 1000);
+
+    if (
+      differenceMinutes >
+      S.w
+    ){
+      show(
+        'err',
+        'This sign-in window has closed. Sign-in is permitted from ' +
+        formatDateTime(openingTime) +
+        ' to ' +
+        formatDateTime(closingTime) +
+        '. Please speak to your lecturer.'
+      );
+
+      btn.disabled = true;
+    }
+    else{
+      sess.innerHTML +=
+        '<br>Open from: ' + escapeHtml(formatDateTime(openingTime)) +
+        '<br>Closes: ' + escapeHtml(formatDateTime(closingTime));
+    }
+  }
+}
+
+
+/* ==========================================================
+   DISTANCE CALCULATION
+   ========================================================== */
 
 function distM(lat1, lng1, lat2, lng2){
   const R = 6371000;
@@ -89,83 +467,46 @@ function distM(lat1, lng1, lat2, lng2){
   return Math.round(2 * R * Math.asin(Math.sqrt(a)));
 }
 
-function sessionWindow(start){
-  return {
-    openingTime: new Date(start.getTime() - S.w * 60 * 1000),
-    closingTime: new Date(start.getTime() + S.w * 60 * 1000)
-  };
-}
+
+/* ==========================================================
+   FINAL TIME-WINDOW VALIDATION
+   ========================================================== */
 
 function stillInsideAttendanceWindow(){
-  if (!S.t) return true;
+  if (!S.t){
+    return true;
+  }
 
   const start = parseSessionTime(S.t);
-  if (!start) return false;
+  if (!start){
+    return false;
+  }
 
   const now = new Date();
-  return Math.abs(now - start) / 60000 <= S.w;
+  const differenceMinutes = Math.abs(now - start) / 60000;
+
+  return differenceMinutes <= S.w;
 }
 
-if (!S.id || isNaN(S.lat) || isNaN(S.lng)) {
-  sess.innerHTML = '<b>Invalid QR code.</b> Please scan the code displayed at your venue.';
-  btn.disabled = true;
-} else {
-  sess.innerHTML =
-    '<b>' + escapeHtml(S.subj || S.id) + '</b>' +
-    (S.type ? ' — ' + escapeHtml(S.type) : '') +
-    (S.ven ? '<br>Venue: ' + escapeHtml(S.ven) : '') +
-    (S.t ? '<br>Session: ' + escapeHtml(S.t.replace('T', ' ')) : '') +
-    '<br>Window: ±' + S.w + ' minutes';
-}
 
-if (!btn.disabled && S.t) {
-  const start = parseSessionTime(S.t);
-
-  if (!start) {
-    show(
-      'err',
-      'The session date/time in this QR code is invalid: ' +
-      S.t +
-      '. Please ask your lecturer for a new QR code.'
-    );
-    btn.disabled = true;
-  } else {
-    const now = new Date();
-    const differenceMinutes = Math.abs(now - start) / 60000;
-    const { openingTime, closingTime } = sessionWindow(start);
-
-    if (differenceMinutes > S.w) {
-      show(
-        'err',
-        'This sign-in window has closed. Sign-in is permitted from ' +
-        formatDateTime(openingTime) +
-        ' to ' +
-        formatDateTime(closingTime) +
-        '. Please speak to your lecturer.'
-      );
-      btn.disabled = true;
-    } else {
-      sess.innerHTML +=
-        '<br>Open from: ' + escapeHtml(formatDateTime(openingTime)) +
-        '<br>Closes: ' + escapeHtml(formatDateTime(closingTime));
-    }
-  }
-}
+/* ==========================================================
+   SIGN-IN BUTTON
+   ========================================================== */
 
 btn.addEventListener('click', () => {
   const num = sn.value.trim();
 
-  if (!/^[0-9]{5,12}$/.test(num)) {
+  if (!/^[0-9]{5,12}$/.test(num)){
     show('err', 'Please enter a valid student number (digits only).');
     return;
   }
 
-  if (!FORM_PREFILL_TEMPLATE || FORM_PREFILL_TEMPLATE.startsWith('PASTE_')) {
+  if (!FORM_PREFILL_TEMPLATE || FORM_PREFILL_TEMPLATE.startsWith('PASTE_')){
     show('err', 'This page has not been configured yet. Please tell your lecturer.');
     return;
   }
 
-  if (!stillInsideAttendanceWindow()) {
+  if (!stillInsideAttendanceWindow()){
     show('err', 'The sign-in window has closed. Please speak to your lecturer.');
     btn.disabled = true;
     return;
@@ -174,7 +515,7 @@ btn.addEventListener('click', () => {
   btn.disabled = true;
   show('info', 'Getting your location — allow the permission prompt…');
 
-  if (!navigator.geolocation) {
+  if (!navigator.geolocation){
     btn.disabled = false;
     show('err', 'Location services are not available on this device/browser.');
     return;
@@ -189,7 +530,7 @@ btn.addEventListener('click', () => {
       const d = distM(la, ln, S.lat, S.lng);
       const status = d <= S.r ? 'IN VENUE' : 'OUTSIDE VENUE (' + d + 'm)';
 
-      if (!stillInsideAttendanceWindow()) {
+      if (!stillInsideAttendanceWindow()){
         btn.disabled = true;
         show('err', 'The sign-in window closed while your location was being obtained. Please speak to your lecturer.');
         return;
@@ -213,13 +554,16 @@ btn.addEventListener('click', () => {
     err => {
       btn.disabled = false;
 
-      if (err.code === 1) {
+      if (err.code === 1){
         show('err', 'Location permission was denied. Attendance requires location. Enable location permission in your browser and try again.');
-      } else if (err.code === 2) {
+      }
+      else if (err.code === 2){
         show('err', 'Your location could not be determined. Check that location services are enabled and try again.');
-      } else if (err.code === 3) {
+      }
+      else if (err.code === 3){
         show('err', 'Location request timed out. Move nearer a window or outdoors and try again.');
-      } else {
+      }
+      else{
         show('err', 'Could not read your location (' + err.message + '). Please try again.');
       }
     },
@@ -231,3 +575,6 @@ btn.addEventListener('click', () => {
   );
 });
 </script>
+
+</body>
+</html>
