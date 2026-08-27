@@ -1,0 +1,68 @@
+# BMS Attendance — Backup / Recovery Note
+
+## Working URLs
+- QR generator: `https://rajendrieg.github.io/bms-attendance/qr-generator.html`
+- Sign-in page: `https://rajendrieg.github.io/bms-attendance/signin.html`
+
+## Current Working Flow
+1. Lecturer opens `qr-generator.html`
+2. Generates QR code for a session
+3. Student scans QR and opens `signin.html`
+4. Student enters student number and shares location
+5. Sign-in redirects to Microsoft Form
+6. Form response appears in Excel / AttendanceLog
+
+## QR Generator Base URL
+The QR generator must use:
+`https://rajendrieg.github.io/bms-attendance/signin.html`
+
+## Important Sign-in Page Requirements
+- Must be valid HTML
+- All CSS inside `<style>`
+- All JS inside `<script>`
+- QR parameters expected:
+  - `s` = session ID
+  - `subj` = subject
+  - `type` = session type
+  - `ven` = venue
+  - `lat` = venue latitude
+  - `lng` = venue longitude
+  - `r` = venue radius
+  - `t` = session start time
+  - `w` = window minutes
+- Minimum attendance window enforced: 90 minutes
+
+## Microsoft Form / Logging
+If AttendanceLog stops updating:
+- Check Power Automate flow run history
+- Confirm the form trigger is still active
+- Confirm `Create item` to AttendanceLog still exists
+- Confirm field mappings still match the list columns
+- Check whether the lecturer email Outlook step changed the flow path
+
+## SharePoint / AttendanceLog Columns
+- Title
+- StudentNumber
+- SessionID
+- Lat
+- Lng
+- AccuracyM
+- DistanceM
+- SignInStatus
+- EntryMethod
+- ManualReason
+- ScanTimestamp
+- Subject
+
+## Quick Recovery Steps
+If QR scanning fails:
+1. Confirm scanned URL opens `signin.html`
+2. Confirm GitHub Pages is serving the latest `signin.html`
+3. Check browser console for JavaScript errors
+4. Regenerate QR after refreshing `qr-generator.html`
+
+If form logging fails:
+1. Submit a test sign-in
+2. Check Excel response capture
+3. Check Power Automate flow run
+4. Restore the SharePoint create-item step if needed
