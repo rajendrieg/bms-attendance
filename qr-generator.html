@@ -38,7 +38,7 @@
 <body>
 <div class="panel">
   <h1>QR Sheet Generator — BMS Attendance</h1>
-  <p>Use <b>Quick add a session</b> below — pick the subject and venue from the dropdowns and click <b>Add to sheet</b>. Click <b>Generate QR sheet</b>, then display it on the projector's first slide or your own phone — no printing required.</p>
+  <p>Use <b>Quick add a session</b> below — pick the subject and venue from the dropdowns and click <b>Add to sheet</b>. Click <b>Generate QR sheet</b>, then display it on the projector's first slide or print it for distribution.</p>
   <div class="quickadd">
     <div class="title">Quick add a session</div>
     <div class="sub">Pick a venue from the list — its coordinates are already saved, so you never have to type or look them up.</div>
@@ -101,15 +101,14 @@
         <label>Latitude</label><input type="text" id="nvLat" placeholder="e.g. -29.9689" style="width:110px">
         <label>Longitude</label><input type="text" id="nvLng" placeholder="e.g. 30.9139" style="width:110px">
         <label>Radius (m)</label><input type="number" id="nvRadius" value="80" style="width:80px">
-        <button type="button" class="secondary" onclick="useMyLocation()">&#128205; Use my current location</button>
+        <button type="button" class="secondary" onclick="useMyLocation()">📍 Use my current location</button>
         <button type="button" onclick="saveVenue()">Save venue</button>
       </div>
-      <div class="newvenue-tip">Stand inside the venue, click <b>Use my current location</b> to capture GPS, then <b>Save venue</b>. It’s remembered on this device and appears in the Venue dropdown every session.</div>
+      <div class="newvenue-tip">Stand inside the venue, click <b>Use my current location</b> to capture GPS, then <b>Save venue</b>. It’s remembered on this device and appears in the Venue dropdown.</div>
     </details>
   </div>
-  <p style="font-size:12px;color:#5d6470">Prefer to paste several sessions? One line per session, semicolon-separated: <b>SessionID; Subject; Type; Venue; VenueLat; VenueLng; RadiusM; StartLocal (YYYY-MM-DDTHH:MM); WindowMins</b><br>
-  <span style="color:#b42318;font-weight:600">Subject must exactly match a dropdown option above.</span></p>
-  <textarea id="src">DEMO-001; Cytology II (BCTO202); Practical; Histo/Cyto Lab; -29.9689; 30.9139; 80; 2026-08-18T11:00; 20</textarea>
+  <p style="font-size:12px;color:#5d6470">Prefer to paste several sessions? One line per session, semicolon-separated: <b>SessionID; Subject; Type; Venue; VenueLat; VenueLng; RadiusM; StartLocal (YYYY-MM-DDTHH:mm); WindowMins</b> <span style="color:#b42318;font-weight:600">Subject must exactly match a dropdown option above.</span></p>
+  <textarea id="src">DEMO-001; Cytology II (BCTO202); Practical; Histo/Cyto Lab; -29.9689; 30.9139; 80; 2026-08-18T11:00; 90</textarea>
   <div class="row">
     <label>Sign-in page URL:</label>
     <input type="text" id="base" value="https://rajendrieg.github.io/bms-attendance/signin.html">
@@ -118,17 +117,125 @@
 </div>
 <div class="cards" id="cards"></div>
 <script>
-const DEFAULT_VENUES=[{name:"Hall 7/8",lat:-29.9689,lng:30.9139,radius:300},{name:"NS01",lat:-29.9689,lng:30.9139,radius:300},{name:"P21",lat:-29.9689,lng:30.9139,radius:300},{name:"Haem Lab",lat:-29.9689,lng:30.9139,radius:80},{name:"Chem Path Lab",lat:-29.9689,lng:30.9139,radius:80},{name:"Micro Lab",lat:-29.9689,lng:30.9139,radius:80},{name:"Histo/Cyto Lab",lat:-29.9689,lng:30.9139,radius:80}];
-function loadVenues(){try{const s=JSON.parse(localStorage.getItem('bmsVenues')||'null');if(s&&Array.isArray(s)&&s.length)return s;}catch(e){}return DEFAULT_VENUES.slice();}
-function persistVenues(){try{localStorage.setItem('bmsVenues',JSON.stringify(VENUES));}catch(e){}}
+const DEFAULT_VENUES=[
+  {name:"Hall 7/8",lat:-29.9689,lng:30.9139,radius:300},
+  {name:"NS01",lat:-29.9689,lng:30.9139,radius:300},
+  {name:"P21",lat:-29.9689,lng:30.9139,radius:300},
+  {name:"Haem Lab",lat:-29.9689,lng:30.9139,radius:80},
+  {name:"Histo/Cyto Lab",lat:-29.9689,lng:30.9139,radius:80}
+];
+
+function loadVenues(){
+  try{
+    const s=JSON.parse(localStorage.getItem('bmsVenues')||'null');
+    if(s&&Array.isArray(s)&&s.length) return s;
+  }catch(e){}
+  return DEFAULT_VENUES.slice();
+}
+
+function persistVenues(){
+  try{ localStorage.setItem('bmsVenues',JSON.stringify(VENUES)); }catch(e){}
+}
+
 let VENUES=loadVenues();
-function populateVenueDropdown(p){const sel=document.getElementById('qaVenue');sel.innerHTML=VENUES.map((v,i)=>'<option value="'+i+'">'+v.name+'<\/option>').join('');if(p){const i=VENUES.findIndex(v=>v.name===p);if(i>=0)sel.value=i;}onVenueChange();}
-function onVenueChange(){const v=VENUES[document.getElementById('qaVenue').value];document.getElementById('venueDetail').textContent=v?v.name+': '+v.lat+', '+v.lng+' · radius '+v.radius+'m':'';}
-function useMyLocation(){if(!navigator.geolocation){alert('Location unavailable.');return;}navigator.geolocation.getCurrentPosition(p=>{document.getElementById('nvLat').value=p.coords.latitude.toFixed(6);document.getElementById('nvLng').value=p.coords.longitude.toFixed(6);},e=>{alert('Could not get location: '+e.message);},{enableHighAccuracy:true,timeout:10000});}
-function saveVenue(){const name=document.getElementById('nvName').value.trim(),lat=document.getElementById('nvLat').value.trim(),lng=document.getElementById('nvLng').value.trim(),radius=document.getElementById('nvRadius').value.trim()||'80';if(!name||!lat||!lng){alert('Name, latitude and longitude required.');return;}const entry={name,lat:parseFloat(lat),lng:parseFloat(lng),radius:parseInt(radius,10)};const idx=VENUES.findIndex(v=>v.name.toLowerCase()===name.toLowerCase());if(idx>=0)VENUES[idx]=entry;else VENUES.push(entry);persistVenues();populateVenueDropdown(name);document.getElementById('nvName').value='';document.getElementById('nvLat').value='';document.getElementById('nvLng').value='';alert('Venue "'+name+'" saved.');}
-function addLine(){const id=document.getElementById('qaId').value.trim(),subj=document.getElementById('qaSubj').value,type=document.getElementById('qaType').value,v=VENUES[document.getElementById('qaVenue').value],dt=document.getElementById('qaDT').value,win=document.getElementById('qaWin').value.trim()||'90';if(!id){alert('Enter a Session ID.');return;}if(!subj){alert('Select a subject.');return;}if(!v){alert('Select a venue.');return;}if(!dt){alert('Enter date and time.');return;}const line=[id,subj,type,v.name,v.lat,v.lng,v.radius,dt,win].join('; ');const ta=document.getElementById('src');ta.value=(ta.value.trim()?ta.value.trim()+'\n':'')+line;document.getElementById('qaId').value='';document.getElementById('qaSubj').value='';gen();}
-function gen(){const base=document.getElementById('base').value.trim().replace(/\/$/,'');const cards=document.getElementById('cards');cards.innerHTML='';for(const line of document.getElementById('src').value.split('\n')){if(!line.trim())continue;const p=line.split(';').map(s=>s.trim());if(p.length<9){cards.insertAdjacentHTML('beforeend','<div class="qcard"><h2 style="color:#b42318">Bad line<\/h2><div class="meta">'+line+'<\/div><\/div>');continue;}const[id,subj,type,ven,lat,lng,r,t,w]=p;const url=base+'?s='+encodeURIComponent(id)+'&subj='+encodeURIComponent(subj)+'&type='+encodeURIComponent(type)+'&ven='+encodeURIComponent(ven)+'&lat='+lat+'&lng='+lng+'&r='+r+'&t='+t+'&w='+w;const el=document.createElement('div');el.className='qcard';el.innerHTML='<h2>'+subj+'<\/h2><div class="meta">'+type+' · '+ven+'<br>'+t.replace('T',' ')+' · sign-in window ±'+w+' min<br><b>'+id+'<\/b><\/div><div class="qr"><\/div><div class="hint">Scan → allow location → enter student number. Sign-in only counts inside the venue.<\/div>';cards.appendChild(el);new QRCode(el.querySelector('.qr'),{text:url,width:190,height:190,correctLevel:QRCode.CorrectLevel.M});}}
-populateVenueDropdown();gen();
+
+function populateVenueDropdown(p){
+  const sel=document.getElementById('qaVenue');
+  sel.innerHTML=VENUES.map((v,i)=>'<option value="'+i+'">'+v.name+'<\/option>').join('');
+  if(p){
+    const i=VENUES.findIndex(v=>v.name.toLowerCase()===p.toLowerCase());
+    if(i>=0) sel.value=String(i);
+  }
+  onVenueChange();
+}
+
+function onVenueChange(){
+  const v=VENUES[document.getElementById('qaVenue').value];
+  document.getElementById('venueDetail').textContent=v?v.name+': '+v.lat+', '+v.lng+' · radius '+v.radius+'m':'';
+}
+
+function useMyLocation(){
+  if(!navigator.geolocation){ alert('Location unavailable.'); return; }
+  navigator.geolocation.getCurrentPosition(p=>{
+    document.getElementById('nvLat').value=p.coords.latitude.toFixed(6);
+    document.getElementById('nvLng').value=p.coords.longitude.toFixed(6);
+  },err=>alert('Could not get location: '+err.message),{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+}
+
+function saveVenue(){
+  const name=document.getElementById('nvName').value.trim(),
+        lat=document.getElementById('nvLat').value.trim(),
+        lng=document.getElementById('nvLng').value.trim(),
+        radius=document.getElementById('nvRadius').value.trim()||'80';
+  if(!name||!lat||!lng){ alert('Name, latitude and longitude required.'); return; }
+  const entry={name,lat:parseFloat(lat),lng:parseFloat(lng),radius:parseInt(radius,10)};
+  const idx=VENUES.findIndex(v=>v.name.toLowerCase()===name.toLowerCase());
+  if(idx>=0) VENUES[idx]=entry; else VENUES.push(entry);
+  persistVenues();
+  populateVenueDropdown(name);
+  document.getElementById('nvName').value='';
+  document.getElementById('nvLat').value='';
+  document.getElementById('nvLng').value='';
+  alert('Venue "'+name+'" saved.');
+}
+
+function addLine(){
+  const id=document.getElementById('qaId').value.trim(),
+        subj=document.getElementById('qaSubj').value,
+        type=document.getElementById('qaType').value,
+        v=VENUES[document.getElementById('qaVenue').value],
+        dt=document.getElementById('qaDT').value,
+        win=document.getElementById('qaWin').value.trim()||'90';
+
+  if(!id){ alert('Enter a Session ID.'); return; }
+  if(!subj){ alert('Select a subject.'); return; }
+  if(!v){ alert('Select a venue.'); return; }
+  if(!dt){ alert('Enter date and time.'); return; }
+
+  const line=[id,subj,type,v.name,v.lat,v.lng,v.radius,dt,win].join('; ');
+  const ta=document.getElementById('src');
+  ta.value=(ta.value.trim()?ta.value.trim()+'\n':'')+line;
+  document.getElementById('qaId').value='';
+  document.getElementById('qaSubj').value='';
+  gen();
+}
+
+function gen(){
+  const base=document.getElementById('base').value.trim().replace(/\/$/,'');
+  const cards=document.getElementById('cards');
+  cards.innerHTML='';
+
+  for(const line of document.getElementById('src').value.split('\n')){
+    if(!line.trim()) continue;
+
+    const p=line.split(';').map(s=>s.trim());
+    if(p.length<9){
+      cards.insertAdjacentHTML('beforeend','<div class="qcard"><h2 style="color:#b42318">Bad line<\/h2><div class="meta">'+line+'<\/div><\/div>');
+      continue;
+    }
+
+    const [id,subj,type,ven,lat,lng,r,t,w]=p;
+    const url=base+'?s='+encodeURIComponent(id)+'&subj='+encodeURIComponent(subj)+'&type='+encodeURIComponent(type)+'&ven='+encodeURIComponent(ven)+'&lat='+lat+'&lng='+lng+'&r='+r+'&t='+encodeURIComponent(t)+'&w='+encodeURIComponent(w);
+
+    const el=document.createElement('div');
+    el.className='qcard';
+    el.innerHTML=
+      '<h2>'+subj+'<\/h2>'+
+      '<div class="meta">'+type+' · '+ven+'<br>'+t.replace('T',' ')+' · sign-in window ±'+w+' min<br><b>'+id+'<\/b><\/div>'+
+      '<div class="qr"><\/div>'+
+      '<div class="hint">Scan → allow location → enter student number. Sign-in only counts inside the venue.<\/div>';
+    cards.appendChild(el);
+    new QRCode(el.querySelector('.qr'),{
+      text:url,
+      width:190,
+      height:190,
+      correctLevel:QRCode.CorrectLevel.M
+    });
+  }
+}
+
+populateVenueDropdown();
+gen();
 </script>
 </body>
 </html>
